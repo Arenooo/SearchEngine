@@ -1,8 +1,9 @@
 #include "ParsedData.h"
 
-ParsedData::ParsedData(const std::string& url, const std::string& title, const std::string& description, const std::string& text)
+ParsedData::ParsedData(const std::string& url, const std::string& title, const std::string& description, const std::string& text, const std::string& domain)
 {
     _url = url;
+    _domain = domain;
     _title = title;
     _description = description;
     _text = text;
@@ -26,4 +27,9 @@ std::string ParsedData::GetDescription()
 std::string ParsedData::GetUrl()
 {
     return _url;
+}
+
+std::string ParsedData::GetDomain()
+{
+    return _domain;
 }

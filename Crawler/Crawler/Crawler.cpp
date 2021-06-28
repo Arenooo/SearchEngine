@@ -1,5 +1,14 @@
 #include "Crawler.h"
 
+std::string Crawler::_domain;
+std::string Crawler::_startUrl;
+std::string Crawler::_currentUrl;
+std::string Crawler::_redirectedUrl;
+std::set<std::string> Crawler::_visitedUrls;
+
+std::vector<std::string> Crawler::_ends;
+std::vector<std::string> Crawler::_starts;
+
 std::string Crawler::ToUpper(const std::string& str)
 {
     std::string ret;
@@ -138,7 +147,6 @@ std::string Crawler::GetText(GumboNode* node, std::string& title, std::string& d
 
 std::string Crawler::GetDomain(std::string& url)
 {
-
     int start = url.find(".");
 
     if(start == std::string::npos)
@@ -159,13 +167,6 @@ std::string Crawler::GetDomain(std::string& url)
     std::string sub = url.substr(start, end - start);
 
     return sub;
-}
-
-Crawler::Crawler(const std::string& startUrl)
-{
-    _startUrl = startUrl;
-    _ends = std::vector<std::string>{".doc", ".png", ".jpg", ".jpeg", ".pdf", ".djvu"};
-    _starts = std::vector<std::string>{"mailto", "tel"};
 }
 
 std::pair<std::set<std::string>, ParsedData> Crawler::Parse(const std::string& document)
@@ -189,11 +190,12 @@ std::pair<std::set<std::string>, ParsedData> Crawler::Parse(const std::string& d
 
     gumbo_destroy_output(&kGumboDefaultOptions, output);
     
-    return std::pair<std::set<std::string>, ParsedData>(ret, ParsedData(_currentUrl, title, description, text));
+    return std::pair<std::set<std::string>, ParsedData>(ret, ParsedData(_currentUrl, title, description, text, _domain));
 }
 
-std::vector<ParsedData> Crawler::Begin()
+std::vector<ParsedData> Crawler::Begin(const std::string& url)
 {
+    _startUrl = url;
     int count = 0;
     std::vector<ParsedData> ret;
     std::queue<std::string> linkQueue;
@@ -205,6 +207,7 @@ std::vector<ParsedData> Crawler::Begin()
     std::string link;
 
     linkQueue.push(_startUrl);
+    _visitedUrls.insert(_startUrl);
     _domain = GetDomain(_startUrl);
 
     while(linkQueue.size() != 0)
@@ -213,7 +216,11 @@ std::vector<ParsedData> Crawler::Begin()
 
         linkQueue.pop();
 
-        result = PageLoader::MakeRequest(_currentUrl);
+        result = PageLoader::MakeRequest(_currentUrl, _redirectedUrl);
+
+        if(_redirectedUrl != "" && _redirectedUrl != _currentUrl && !_visitedUrls.insert(_redirectedUrl).second)
+            continue;
+
         status = result.GetStatus();
         
         if(status < 200 || status > 399)
@@ -221,7 +228,7 @@ std::vector<ParsedData> Crawler::Begin()
         
         std::cout << ++count << " Size: " << linkQueue.size() << ' ' + _currentUrl << '\n';
         
-        std::pair<std::set<std::string>, ParsedData> data = Parse(result.GetHtmlDocument());
+        std::pair<std::set<std::string>, ParsedData> data = Crawler::Parse(result.GetHtmlDocument());
 
         ret.push_back(data.second);
 
@@ -234,15 +241,38 @@ std::vector<ParsedData> Crawler::Begin()
 
 int main()
 {
-    Crawler crawler("https://42yerevan.am");
-
-    std::vector<ParsedData> parsedData = crawler.Begin();
+    int count = 0, save;
+    std::string startUrl;
+    
+    std::vector<std::string> types = {"string", "string", "string", "string", "string"}, values;
+    std::string request = "insert into WebsiteData.WebsiteData values(?,?,?,?,?)";
 
     DataBase::Init("tcp://127.0.0.1:3306", "root", "154215", "WebsiteData");
+    
+    std::cout << "Enter urls to start with. Type \"quit\" to end the input\n";
 
-    for(int i = 0; i < parsedData.size(); ++i)
+    while(true)
     {
-        DataBase::MakeRequest("insert into WebsiteData.WebsiteData values(\'" + parsedData[i].GetUrl() 
-        + "\',\'" + parsedData[i].GetText() + "\',\'" + parsedData[i].GetTitle() + "\',\'" + parsedData[i].GetDescription() + "\')");
+        save = count;
+
+        std::cin >> startUrl;
+
+        if(startUrl == "quit")
+            break;
+
+        std::vector<ParsedData> parsedData = Crawler::Begin(startUrl);
+        
+        
+        for(int i = 0; i < parsedData.size(); ++i)
+        {
+            values = {parsedData[i].GetUrl(), parsedData[i].GetTitle(), parsedData[i].GetDescription(), parsedData[i].GetText(), parsedData[i].GetDomain()};
+
+            if(DataBase::MakeRequest(request, types, values) != nullptr)
+                ++count;
+        }
+
+        std::cout << "\n\n**Finished indexing \"" + startUrl + "\". Indexed " << count - save << " new webpages.**\n\n";
     }
+
+    std::cout << "\n\n" << count << " new webpages have been indexed.\n\n";
 }

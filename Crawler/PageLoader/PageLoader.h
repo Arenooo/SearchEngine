@@ -11,7 +11,7 @@ class PageLoader
     
 public:
 
-    static LoadResult MakeRequest(const std::string& url);
+    static LoadResult MakeRequest(const std::string& url, std::string& redirectedUrl);
 };
 
 #endif

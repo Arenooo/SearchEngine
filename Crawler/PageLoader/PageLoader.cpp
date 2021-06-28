@@ -15,13 +15,13 @@ bool PageLoader::IsHtml(char* text)
 
     std::string str(text);
 
-    if(str.substr(0, 9) == "text/html")
+    if(str.substr(0, 9) == "text/html" || str.substr(0, 10) == "text/plain")
         return true;
 
     return false;
 }
 
-LoadResult PageLoader::MakeRequest(const std::string& url)
+LoadResult PageLoader::MakeRequest(const std::string& url, std::string& redirectedUrl)
 {
     CURL* curl = curl_easy_init();
     
@@ -42,10 +42,10 @@ LoadResult PageLoader::MakeRequest(const std::string& url)
 
     CURLcode response = curl_easy_perform(curl);
     
-    char* type, redirectedUrl;
+    char* type, redirUrl;
     long responseCode;
     
-    curl_easy_getinfo(curl, CURLINFO_REDIRECT_URL , &redirectedUrl);
+    curl_easy_getinfo(curl, CURLINFO_REDIRECT_URL , &redirUrl);
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
     curl_easy_getinfo(curl, CURLINFO_CONTENT_TYPE, &type);
     
